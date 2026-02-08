@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>ミコシヤ受付</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+  body { margin:0; font-family:sans-serif; background:#f0f0f0; text-align:center; }
+  h1 { margin:10px 0; }
+  #mode button{
+    font-size:18px; font-weight:800;
+    padding:10px 18px; margin:5px;
+    border-radius:12px; border:3px solid #ff4444;
+    background:#fff; color:#ff4444;
+    min-width:120px;
+  }
+  #mode button.active{ background:#ff4444; color:#fff; }
+  video{
+    width:90%; max-width:420px;
+    border:5px solid #ff4444;
+    border-radius:20px;
+    background:#000;
+  }
+  #msg{ margin:10px 0 0; font-weight:800; color:#333; }
+</style>
+</head>
+<body>
+
+<h1>ミコシヤ受付</h1>
+
+<div id="mode">
+  <button id="btnIn" class="active" type="button">入室</button>
+  <button id="btnOut" type="button">退室</button>
+</div>
+
+<video id="video" playsinline></video>
+<div id="msg">QRをかざしてください</div>
+
+<script>
+  // ★ここ2か所だけ変更する
+  const scriptUrl = "https://script.google.com/macros/s/AKfycbyUFAOkk-A3SwvVhJ8Kl0QHmaxJe-9lPIkDT3fCRRpjpkv6qrWVPuAs2QX_SqM6hDiC/exec";
+  const token = "MIKOSHIYA_2026_tencho_8F3kX2p9Qw7LmN4";
+  const device = "mikoshiya-ipad-front";
+
+  // ここから下は触らない
+  let mode = "IN";
+  const btnIn = document.getElementById("btnIn");
+  const btnOut = document.getElementById("btnOut");
+  const msg = document.getElementById("msg");
+  const video = document.getElementById("video");
+
+  btnIn.onclick = () => setMode("IN");
+  btnOut.onclick = () => setMode("OUT");
+
+  function setMode(m){
+    mode = m;
+    btnIn.classList.toggle("active", m==="IN");
+    btnOut.classList.toggle("active", m==="OUT");
+    msg.textContent = (m==="IN") ? "入室モード：QRをかざしてください" : "退室モード：QRをかざしてください";
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+    .then(stream => {
+      video.srcObject = stream;
+      video.play();
+      requestAnimationFrame(scan);
+    })
+    .catch(() => {
+      msg.textContent = "カメラが使えません（Safariのカメラ許可を確認）";
+      alert("カメラが起動しません。Safariの設定でカメラを許可してください。");
+    });
+
+  // 連打防止（同じQRを3秒無視）
+  const COOLDOWN_MS = 3000;
+  let lastId = "";
+  let lastAt = 0;
+  let sending = false;
+
+  // canvas使い回し
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  function scan(){
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(img.data, img.width, img.height);
+
+      if(code) handleScan(code.data);
+    }
+    requestAnimationFrame(scan);
+  }
+
+  function handleScan(raw){
+    const id = String(raw).trim();
+    const now = Date.now();
+    if(!id) return;
+    if(sending) return;
+    if(id === lastId && (now - lastAt) < COOLDOWN_MS) return;
+
+    lastId = id;
+    lastAt = now;
+    send(id);
+  }
+
+  async function send(id){
+    sending = true;
+    const label = (mode === "IN") ? "入室" : "退室";
+    msg.textContent = `${id} さん ${label} 送信中…`;
+
+    try{
+      const url = `${scriptUrl}?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode)}&token=${encodeURIComponent(token)}&device=${encodeURIComponent(device)}&_=${Date.now()}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      msg.textContent = `${id} さん ${label} OK！`;
+    }catch(e){
+      msg.textContent = `通信失敗…もう一度かざしてね`;
+      lastAt = 0; // 失敗時はすぐ再トライ可
+    }finally{
+      setTimeout(()=> sending = false, 600);
+    }
+  }
+</script>
+</body>
+</html>
