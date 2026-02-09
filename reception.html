@@ -71,16 +71,15 @@ const soundIn  = new Audio("sounds/in.mp3");
 const soundOut = new Audio("sounds/out.mp3");
 soundIn.preload  = "auto";
 soundOut.preload = "auto";
-// 好みで音量（0.0〜1.0）
+// 必要なら音量（0.0〜1.0）
 // soundIn.volume = 0.8; soundOut.volume = 0.8;
 
-/* ===== iPad Safari：ボタンで音アンロック（最も安定） ===== */
+/* ===== iPad Safari：ボタンで音アンロック（最安定） ===== */
 let audioUnlocked = false;
 
 enableBtn.addEventListener("click", async () => {
   try {
     // iOSは「ユーザー操作内で play()」が必須
-    // mutedで短く再生→停止→muted解除 でアンロック
     soundIn.muted = true;
     await soundIn.play();
     soundIn.pause();
@@ -130,12 +129,15 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment
   });
 
 /* ===== QR読み取り ===== */
-const COOLDOWN_MS = 3000;    // 同じQRの連続読み取り防止（3秒）
+const COOLDOWN_MS = 3000;      // 同一QRの短時間連打対策
+const OK_LOCK_MS = 20000;      // ★OK後、全QRを20秒間完全無効化
+let lockUntil = 0;             // この時刻まで読み取り無効
+
 let lastId = "";
 let lastAt = 0;
 let sending = false;
 
-// canvas使い回し（高速化）
+// canvas使い回し
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
@@ -154,10 +156,16 @@ function scan(){
 }
 
 function handleScan(raw){
-  const id = String(raw).trim();
   const now = Date.now();
+
+  // ★OK後20秒ロック：この間は“誰のQRでも”完全無視
+  if (now < lockUntil) return;
+
+  const id = String(raw).trim();
   if (!id) return;
   if (sending) return;
+
+  // 同じQRの短時間連打を抑制
   if (id === lastId && (now - lastAt) < COOLDOWN_MS) return;
 
   lastId = id;
@@ -184,6 +192,9 @@ async function send(id){
 
     msg.textContent = `${id} さん ${label} OK！`;
 
+    // ★ここで20秒ロック開始
+    lockUntil = Date.now() + OK_LOCK_MS;
+
     // 成功時の効果音（iPadは先に「音を有効にする」が必要）
     if (audioUnlocked) {
       if (mode === "IN") {
@@ -195,13 +206,32 @@ async function send(id){
       }
     }
 
+    // 任意：受付完了メッセージ（ロック中の案内）
+    setTimeout(() => {
+      // ロック中は表示を固定（次の方どうぞ）
+      if (Date.now() < lockUntil) {
+        const sec = Math.ceil((lockUntil - Date.now()) / 1000);
+        msg.textContent = `受付完了。次の方どうぞ（あと${sec}秒）`;
+      }
+    }, 100);
+
   } catch(e){
     msg.textContent = "通信失敗…もう一度かざしてね";
-    lastAt = 0; // 失敗時はすぐ再トライ可
+    lastAt = 0;      // 失敗時はすぐ再トライ可
+    lockUntil = 0;   // 失敗時はロックしない
   } finally {
-    setTimeout(() => sending = false, 600);
+    setTimeout(()=> sending = false, 600);
   }
 }
+
+// ロック中の残り秒を更新（見やすくする：任意）
+setInterval(() => {
+  if (Date.now() < lockUntil) {
+    const sec = Math.ceil((lockUntil - Date.now()) / 1000);
+    msg.textContent = `受付完了。次の方どうぞ（あと${sec}秒）`;
+  }
+}, 500);
+
 </script>
 </body>
 </html>
