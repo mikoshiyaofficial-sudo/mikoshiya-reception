@@ -1,78 +1,60 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>ミコシヤ受付</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>ミコシヤ受付</title>
 
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
-<style>
-  body {
-    margin: 0;
-    font-family: sans-serif;
-    background: #f0f0f0;
-    text-align: center;
-  }
-  h1 { margin: 10px 0; }
+  <style>
+    body { margin:0; font-family:sans-serif; background:#f0f0f0; text-align:center; }
+    h1 { margin:10px 0; }
 
-  #mode button {
-    font-size: 18px;
-    font-weight: 800;
-    padding: 10px 18px;
-    margin: 5px;
-    border-radius: 12px;
-    border: 3px solid #ff4444;
-    background: #fff;
-    color: #ff4444;
-    min-width: 120px;
-  }
-  #mode button.active {
-    background: #ff4444;
-    color: #fff;
-  }
+    #mode button{
+      font-size:18px; font-weight:800;
+      padding:10px 18px; margin:5px;
+      border-radius:12px; border:3px solid #ff4444;
+      background:#fff; color:#ff4444;
+      min-width:120px;
+    }
+    #mode button.active{ background:#ff4444; color:#fff; }
 
-  video {
-    width: 90%;
-    max-width: 420px;
-    border: 5px solid #ff4444;
-    border-radius: 20px;
-    background: #000;
-  }
+    video{
+      width:90%; max-width:420px;
+      border:5px solid #ff4444;
+      border-radius:20px;
+      background:#000;
+    }
 
-  #msg {
-    margin: 10px 0;
-    font-weight: 800;
-    color: #333;
-  }
+    #msg{ margin:10px 0; font-weight:800; color:#333; }
 
-  #enableSound {
-    font-size: 16px;
-    padding: 10px 16px;
-    border-radius: 10px;
-    border: none;
-    background: #333;
-    color: #fff;
-  }
-</style>
+    #enableSound{
+      font-size:16px;
+      padding:10px 16px;
+      border-radius:10px;
+      border:none;
+      background:#333;
+      color:#fff;
+    }
+  </style>
 </head>
 
 <body>
+  <h1>ミコシヤ受付</h1>
 
-<h1>ミコシヤ受付</h1>
+  <div id="mode">
+    <button id="btnIn" class="active" type="button">入室</button>
+    <button id="btnOut" type="button">退室</button>
+  </div>
 
-<div id="mode">
-  <button id="btnIn" class="active">入室</button>
-  <button id="btnOut">退室</button>
-</div>
+  <video id="video" playsinline></video>
 
-<video id="video" playsinline></video>
-
-<div id="msg">QRをかざしてください</div>
-<button id="enableSound">🔊 音を有効にする</button>
+  <div id="msg">QRをかざしてください</div>
+  <button id="enableSound" type="button">🔊 音を有効にする</button>
 
 <script>
-/* ===== 設定（ここだけ必要なら変更） ===== */
+/* ===== 設定（必要ならここだけ変更） ===== */
 const scriptUrl = "https://script.google.com/macros/s/AKfycbwA9v9s1mGSwiGfPoBwh339dbXSavqGhC-DH-uR-OWu27eXmyZw3UR3bikBZrJGdm87/exec";
 const token = "MIKOSHIYA_2026_tencho_8F3kX2p9Qw7LmN4";
 const device = "mikoshiya-ipad-front";
@@ -84,15 +66,21 @@ const btnOut = document.getElementById("btnOut");
 const video = document.getElementById("video");
 const enableBtn = document.getElementById("enableSound");
 
-/* ===== 効果音 ===== */
+/* ===== 効果音（sounds/ 配下） ===== */
 const soundIn  = new Audio("sounds/in.mp3");
 const soundOut = new Audio("sounds/out.mp3");
-soundIn.preload = "auto";
+soundIn.preload  = "auto";
 soundOut.preload = "auto";
+// 好みで音量（0.0〜1.0）
+// soundIn.volume = 0.8; soundOut.volume = 0.8;
 
-/* ===== iPad / Safari 音アンロック ===== */
+/* ===== iPad Safari：ボタンで音アンロック（最も安定） ===== */
+let audioUnlocked = false;
+
 enableBtn.addEventListener("click", async () => {
   try {
+    // iOSは「ユーザー操作内で play()」が必須
+    // mutedで短く再生→停止→muted解除 でアンロック
     soundIn.muted = true;
     await soundIn.play();
     soundIn.pause();
@@ -105,9 +93,11 @@ enableBtn.addEventListener("click", async () => {
     soundOut.currentTime = 0;
     soundOut.muted = false;
 
+    audioUnlocked = true;
     msg.textContent = "🔊 音OK！QRをかざしてね";
     enableBtn.style.display = "none";
   } catch (e) {
+    audioUnlocked = false;
     msg.textContent = "⚠️ 音の有効化に失敗。もう一度タップしてね";
   }
 });
@@ -115,57 +105,60 @@ enableBtn.addEventListener("click", async () => {
 /* ===== モード切替 ===== */
 let mode = "IN";
 
-btnIn.onclick = () => setMode("IN");
-btnOut.onclick = () => setMode("OUT");
+btnIn.addEventListener("click", () => setMode("IN"));
+btnOut.addEventListener("click", () => setMode("OUT"));
 
-function setMode(m) {
+function setMode(m){
   mode = m;
-  btnIn.classList.toggle("active", m === "IN");
-  btnOut.classList.toggle("active", m === "OUT");
-  msg.textContent = (m === "IN")
+  btnIn.classList.toggle("active", m==="IN");
+  btnOut.classList.toggle("active", m==="OUT");
+  msg.textContent = (m==="IN")
     ? "入室モード：QRをかざしてください"
     : "退室モード：QRをかざしてください";
 }
 
 /* ===== カメラ起動 ===== */
-navigator.mediaDevices.getUserMedia({
-  video: { facingMode: { ideal: "environment" } }
-})
-.then(stream => {
-  video.srcObject = stream;
-  video.play();
-  requestAnimationFrame(scan);
-})
-.catch(() => {
-  msg.textContent = "カメラが使えません（Safari設定を確認）";
-});
+navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+  .then(stream => {
+    video.srcObject = stream;
+    video.play();
+    requestAnimationFrame(scan);
+  })
+  .catch(() => {
+    msg.textContent = "カメラが使えません（Safariのカメラ許可を確認）";
+    alert("カメラが起動しません。Safariの設定でカメラを許可してください。");
+  });
 
-/* ===== QR処理 ===== */
-const COOLDOWN_MS = 3000;
+/* ===== QR読み取り ===== */
+const COOLDOWN_MS = 3000;    // 同じQRの連続読み取り防止（3秒）
 let lastId = "";
 let lastAt = 0;
 let sending = false;
 
+// canvas使い回し（高速化）
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-function scan() {
+function scan(){
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(img.data, img.width, img.height);
+
     if (code) handleScan(code.data);
   }
   requestAnimationFrame(scan);
 }
 
-function handleScan(raw) {
+function handleScan(raw){
   const id = String(raw).trim();
   const now = Date.now();
-  if (!id || sending) return;
-  if (id === lastId && now - lastAt < COOLDOWN_MS) return;
+  if (!id) return;
+  if (sending) return;
+  if (id === lastId && (now - lastAt) < COOLDOWN_MS) return;
 
   lastId = id;
   lastAt = now;
@@ -173,12 +166,12 @@ function handleScan(raw) {
 }
 
 /* ===== 送信 ===== */
-async function send(id) {
+async function send(id){
   sending = true;
   const label = (mode === "IN") ? "入室" : "退室";
   msg.textContent = `${id} さん ${label} 送信中…`;
 
-  try {
+  try{
     const url =
       `${scriptUrl}?id=${encodeURIComponent(id)}` +
       `&mode=${encodeURIComponent(mode)}` +
@@ -187,26 +180,28 @@ async function send(id) {
       `&_=${Date.now()}`;
 
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error("HTTP " + res.status);
 
     msg.textContent = `${id} さん ${label} OK！`;
 
-    if (mode === "IN") {
-      soundIn.currentTime = 0;
-      soundIn.play();
-    } else {
-      soundOut.currentTime = 0;
-      soundOut.play();
+    // 成功時の効果音（iPadは先に「音を有効にする」が必要）
+    if (audioUnlocked) {
+      if (mode === "IN") {
+        soundIn.currentTime = 0;
+        soundIn.play();
+      } else {
+        soundOut.currentTime = 0;
+        soundOut.play();
+      }
     }
 
-  } catch {
+  } catch(e){
     msg.textContent = "通信失敗…もう一度かざしてね";
-    lastAt = 0;
+    lastAt = 0; // 失敗時はすぐ再トライ可
   } finally {
     setTimeout(() => sending = false, 600);
   }
 }
 </script>
-
 </body>
 </html>
