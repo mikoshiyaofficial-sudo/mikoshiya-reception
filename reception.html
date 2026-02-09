@@ -42,6 +42,18 @@
   const scriptUrl = "https://script.google.com/macros/s/AKfycbwA9v9s1mGSwiGfPoBwh339dbXSavqGhC-DH-uR-OWu27eXmyZw3UR3bikBZrJGdm87/exec";
   const token = "MIKOSHIYA_2026_tencho_8F3kX2p9Qw7LmN4";
   const device = "mikoshiya-ipad-front";
+  
+// 効果音
+const soundIn = new Audio("in.mp3");
+const soundOut = new Audio("out.mp3");
+
+// iPad/Safari対策：最初のタップで音を有効化
+function unlockAudio() {
+  soundIn.play().then(() => soundIn.pause()).catch(()=>{});
+  soundOut.play().then(() => soundOut.pause()).catch(()=>{});
+  document.removeEventListener("touchstart", unlockAudio);
+}
+document.addEventListener("touchstart", unlockAudio, { once: true });
 
   // ここから下は触らない
   let mode = "IN";
@@ -117,6 +129,16 @@
       const res = await fetch(url, { cache: "no-store" });
       if(!res.ok) throw new Error("HTTP " + res.status);
       msg.textContent = `${id} さん ${label} OK！`;
+      
+      // 成功時の効果音
+if (mode === "IN") {
+  soundIn.currentTime = 0;
+  soundIn.play();
+} else {
+  soundOut.currentTime = 0;
+  soundOut.play();
+}
+
     }catch(e){
       msg.textContent = `通信失敗…もう一度かざしてね`;
       lastAt = 0; // 失敗時はすぐ再トライ可
@@ -127,4 +149,5 @@
 </script>
 </body>
 </html>
+
 
